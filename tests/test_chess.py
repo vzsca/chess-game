@@ -2,7 +2,7 @@ import unittest
 
 from backend.board import create_board
 from backend.game import ChessGame
-from backend.moves import is_in_check, legal_moves
+from backend.moves import game_state, is_in_check
 
 
 class BackendTestCase(unittest.TestCase):
@@ -62,6 +62,7 @@ class BackendTestCase(unittest.TestCase):
         game.board[7][4] = "♔"
         game.board[7][7] = "♖"
         game.board[0][4] = "♚"
+        game.turn = "blanc"
         self.assertTrue(game.move((7, 7), (6, 7)))
         game.turn = "blanc"
         self.assertNotIn((7, 6), game.legal_moves(7, 4))
@@ -71,15 +72,15 @@ class BackendTestCase(unittest.TestCase):
         game.board[7][4] = "♔"
         game.board[0][4] = "♚"
         game.board[3][4] = "♙"
-        game.board[1][5] = "♟"
+        game.board[1][3] = "♟"
         game.turn = "noir"
         game.position_history = [game.position_key()]
-        self.assertTrue(game.move((1, 5), (3, 5)))
-        self.assertEqual(game.en_passant, (2, 5))
-        self.assertIn((2, 5), game.legal_moves(3, 4))
-        self.assertTrue(game.move((3, 4), (2, 5)))
-        self.assertEqual(game.board[3][5], " ")
-        self.assertEqual(game.board[2][5], "♙")
+        self.assertTrue(game.move((1, 3), (3, 3)))
+        self.assertEqual(game.en_passant, (2, 3))
+        self.assertIn((2, 3), game.legal_moves(3, 4))
+        self.assertTrue(game.move((3, 4), (2, 3)))
+        self.assertEqual(game.board[3][3], " ")
+        self.assertEqual(game.board[2][3], "♙")
 
     def test_all_promotion_choices(self):
         expected = {
@@ -99,30 +100,19 @@ class BackendTestCase(unittest.TestCase):
     def test_checkmate_and_stalemate(self):
         mate = self.empty_game()
         mate.board[0][0] = "♚"
-        mate.board[1][2] = "♔"
-        mate.board[2][1] = "♕"
+        mate.board[2][2] = "♔"
+        mate.board[1][1] = "♕"
         mate.turn = "noir"
         self.assertTrue(is_in_check(mate.board, "noir"))
-        self.assertEqual(mate.result, None)
-        self.assertEqual(
-            __import__("backend.moves", fromlist=["game_state"]).game_state(
-                mate.board, "noir", mate.castling
-            ),
-            "mat",
-        )
+        self.assertEqual(game_state(mate.board, "noir", mate.castling), "mat")
 
         stalemate = self.empty_game()
         stalemate.board[0][0] = "♚"
-        stalemate.board[2][1] = "♔"
-        stalemate.board[1][2] = "♕"
+        stalemate.board[2][2] = "♔"
+        stalemate.board[2][1] = "♕"
         stalemate.turn = "noir"
         self.assertFalse(is_in_check(stalemate.board, "noir"))
-        self.assertEqual(
-            __import__("backend.moves", fromlist=["game_state"]).game_state(
-                stalemate.board, "noir", stalemate.castling
-            ),
-            "pat",
-        )
+        self.assertEqual(game_state(stalemate.board, "noir", stalemate.castling), "pat")
 
     def test_threefold_is_claimable_not_automatic(self):
         game = ChessGame()
@@ -155,8 +145,16 @@ class BackendTestCase(unittest.TestCase):
         game.board[7][0] = "♖"
         game.halfmove_clock = 150
         game.position_history = [game.position_key()]
-        from backend.moves import game_state
-        self.assertEqual(game_state(game.board, game.turn, game.castling, halfmove_clock=150, history=game.position_history), "nulle_75_coups")
+        self.assertEqual(
+            game_state(
+                game.board,
+                game.turn,
+                game.castling,
+                halfmove_clock=150,
+                history=game.position_history,
+            ),
+            "nulle_75_coups",
+        )
 
     def test_dead_material(self):
         game = self.empty_game()
@@ -164,19 +162,33 @@ class BackendTestCase(unittest.TestCase):
         game.board[0][4] = "♚"
         game.board[6][2] = "♗"
         game.position_history = [game.position_key()]
-        from backend.moves import game_state
-        self.assertEqual(game_state(game.board, game.turn, game.castling, history=game.position_history), "nulle_materiel")
+        self.assertEqual(
+            game_state(game.board, game.turn, game.castling, history=game.position_history),
+            "nulle_materiel",
+        )
+
+    def test_same_color_bishops_are_dead_material(self):
+        game = self.empty_game()
+        game.board[7][4] = "♔"
+        game.board[0][4] = "♚"
+        game.board[6][2] = "♗"
+        game.board[1][5] = "♝"
+        game.position_history = [game.position_key()]
+        self.assertEqual(
+            game_state(game.board, game.turn, game.castling, history=game.position_history),
+            "nulle_materiel",
+        )
 
     def test_effective_en_passant_for_repetition_identity(self):
         game = self.empty_game()
         game.board[7][4] = "♔"
-        game.board[0][4] = "♚"
+        game.board[0][0] = "♚"
         game.board[3][4] = "♙"
-        game.board[1][5] = "♟"
-        game.turn = "noir"
+        game.board[3][5] = "♟"
+        game.turn = "blanc"
         game.en_passant = (2, 5)
-        # White's pawn is pinned by the black rook, so the EP capture is not legal.
-        game.board[0][5] = "♜"
+        # White's pawn is pinned to its king by the rook on e8.
+        game.board[0][4] = "♜"
         self.assertIsNone(game._effective_en_passant())
 
 
