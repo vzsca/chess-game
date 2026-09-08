@@ -73,6 +73,28 @@ class ChessGame:
             return False
         if sum(piece == "♚" for row in self.board for piece in row) != 1:
             return False
+
+        # A pawn can never legally remain on a promotion rank.
+        if any(piece in "♙♟" for piece in self.board[0] + self.board[7]):
+            return False
+
+        # Two kings may not occupy adjacent squares.
+        white_king = next((
+            (r, c) for r in range(8) for c in range(8) if self.board[r][c] == "♔"
+        ), None)
+        black_king = next((
+            (r, c) for r in range(8) for c in range(8) if self.board[r][c] == "♚"
+        ), None)
+        if white_king is None or black_king is None:
+            return False
+        if max(abs(white_king[0] - black_king[0]), abs(white_king[1] - black_king[1])) <= 1:
+            return False
+
+        # A legal game can never have more than eight pawns for one side.
+        if sum(piece == "♙" for row in self.board for piece in row) > 8:
+            return False
+        if sum(piece == "♟" for row in self.board for piece in row) > 8:
+            return False
         return True
 
     def _valid_state(self):
@@ -87,14 +109,22 @@ class ChessGame:
                 return False
             if not all(isinstance(value, bool) for value in data.values()):
                 return False
-        if self.en_passant is not None and (
-            not isinstance(self.en_passant, (tuple, list))
-            or len(self.en_passant) != 2
-            or not all(isinstance(value, int) for value in self.en_passant)
-            or not self._valid_square(*self.en_passant)
-        ):
-            return False
+
+        if self.en_passant is not None:
+            if (
+                not isinstance(self.en_passant, tuple)
+                or len(self.en_passant) != 2
+                or not all(isinstance(value, int) for value in self.en_passant)
+                or not self._valid_square(*self.en_passant)
+            ):
+                return False
+            expected_row = 2 if self.turn == "blanc" else 5
+            if self.en_passant[0] != expected_row or self.board[self.en_passant[0]][self.en_passant[1]] != EMPTY:
+                return False
+
         if not isinstance(self.halfmove_clock, int) or self.halfmove_clock < 0:
+            return False
+        if not isinstance(self.position_history, list) or not self.position_history:
             return False
         return True
 
@@ -183,10 +213,10 @@ class ChessGame:
         return True
 
     def can_claim_fifty_move_draw(self):
-        return not self.game_over and self.halfmove_clock >= 100
+        return not self.game_over and self._valid_state() and self.halfmove_clock >= 100
 
     def can_claim_threefold_repetition(self):
-        if self.game_over or not self.position_history:
+        if self.game_over or not self._valid_state():
             return False
         current = self.position_history[-1]
         return sum(position == current for position in self.position_history) >= 3
