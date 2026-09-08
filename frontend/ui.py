@@ -137,17 +137,15 @@ class ChessUI:
         )
 
         selected = StringVar(popup, value="queen")
-        options = list(self.PROMOTION_LABELS.keys())
-        OptionMenu(
-            popup,
-            selected,
-            *options,
-        ).pack(padx=15, pady=5)
+        labels = list(self.PROMOTION_LABELS.values())
+        label_to_piece = {label: piece for piece, label in self.PROMOTION_LABELS.items()}
+        selected_label = StringVar(popup, value=self.PROMOTION_LABELS["queen"])
+        OptionMenu(popup, selected_label, *labels).pack(padx=15, pady=5)
 
         result = {"value": None}
 
         def validate():
-            result["value"] = selected.get()
+            result["value"] = label_to_piece[selected_label.get()]
             popup.destroy()
 
         Button(popup, text="Valider", command=validate).pack(pady=(8, 15))
