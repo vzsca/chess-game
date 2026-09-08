@@ -7,12 +7,17 @@ The project is organized so that the chess rules are independent from the graphi
 ## ✨ Features
 
 - Two-player local chess
-- Legal move validation
+- Legal move validation with king-safety checks
 - Check, checkmate and stalemate detection
-- Castling with rook validation
-- Automatic queen promotion
+- Castling with complete rook/king rights validation
+- En passant
+- Promotion to queen, rook, bishop or knight through a Tkinter popup
+- FIDE draw rules: dead positions, threefold/fivefold repetition and 50/75-move rules
+- Automatic terminal draws for fivefold repetition and 75 moves
+- Claim buttons for the threefold repetition and 50-move rules
 - Tkinter graphical interface
 - Backend/frontend separation
+- Automated backend tests
 - No external Python dependencies
 
 ## 📁 Project structure
@@ -23,12 +28,16 @@ chess-game/
 │   ├── __init__.py
 │   ├── board.py       # Board representation and helpers
 │   ├── constants.py   # Pieces, colors and movement constants
-│   └── moves.py       # Move generation and check detection
+│   ├── game.py        # Game state, moves and draw claims
+│   └── moves.py       # Move generation, attacks and rule detection
 ├── frontend/
 │   ├── __init__.py
 │   └── ui.py          # Tkinter interface
 ├── tests/
-│   └── ...            # Automated tests
+│   └── test_chess.py  # Backend rule tests
+├── .github/
+│   └── workflows/
+│       └── tests.yml  # Continuous integration
 ├── main.py            # Application entry point
 ├── .gitignore
 ├── LICENSE
@@ -53,40 +62,15 @@ Tkinter is included with most standard Python installations. On some Linux distr
 
 ## 🧱 Architecture
 
-The project follows a simple separation of responsibilities:
+The project keeps the original gameplay model intact: an 8×8 grid of Tkinter buttons, colored squares, Unicode chess pieces and click-based legal-move selection.
 
-- **Backend**: contains the board, chess rules and move validation. It does not depend on Tkinter.
-- **Frontend**: displays the game and handles user interaction.
+The responsibilities are separated as follows:
+
+- **Backend**: board state, move generation, attack detection, special moves and FIDE draw rules. It does not depend on Tkinter.
+- **Frontend**: displays the board, handles clicks and shows promotion/draw controls.
 - **Entry point**: starts the application.
 
-This makes the chess engine easier to test and allows another interface to be added later without rewriting the rules.
-
-## 🛠️ Development
-
-Clone the repository:
-
-```bash
-git clone https://github.com/vzsca/chess-game.git
-cd chess-game
-```
-
-Optional virtual environment:
-
-```bash
-python -m venv .venv
-```
-
-Windows:
-
-```bash
-.venv\\Scripts\\activate
-```
-
-Linux/macOS:
-
-```bash
-source .venv/bin/activate
-```
+The backend may use a different internal organization without changing the visible board design or the core interaction model.
 
 ## 🧪 Tests
 
@@ -95,6 +79,14 @@ Run the test suite with:
 ```bash
 python -m unittest discover -s tests -v
 ```
+
+The same test command runs automatically in GitHub Actions on pushes and pull requests.
+
+## 📜 Chess rules
+
+The implementation follows the FIDE Laws of Chess for the rules relevant to this local board game, including check/checkmate, castling, en passant, promotion, dead positions, threefold/fivefold repetition and the 50/75-move rules.
+
+Threefold repetition and the 50-move rule are claims; fivefold repetition and the 75-move rule are automatic draws. Checkmate takes precedence over the automatic 75-move draw, as required by the FIDE rules.
 
 ## 📜 License
 
