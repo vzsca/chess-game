@@ -1,10 +1,12 @@
 """Complete state of a chess game and its FIDE rule handling."""
 
 from .board import create_board, piece_color
+from .constants import EMPTY, BLACK_PIECES, WHITE_PIECES
 from .moves import game_state, is_in_check, legal_moves
 
 
 PROMOTION_CHOICES = {"queen", "rook", "bishop", "knight"}
+COLORS = {"blanc", "noir"}
 
 
 class ChessGame:
@@ -28,7 +30,7 @@ class ChessGame:
 
     def _effective_en_passant(self):
         """Return the EP target only when a legal EP capture actually exists."""
-        if self.en_passant is None:
+        if self.en_passant is None or not self._valid_square(*self.en_passant):
             return None
 
         target_row, target_col = self.en_passant
@@ -58,49 +60,104 @@ class ChessGame:
         )
         return board, self.turn, rights, self._effective_en_passant()
 
+    def _valid_board(self):
+        """Validate the basic invariants required by the move engine."""
+        if not isinstance(self.board, list) or len(self.board) != 8:
+            return False
+        if any(not isinstance(row, list) or len(row) != 8 for row in self.board):
+            return False
+        allowed = set(WHITE_PIECES + BLACK_PIECES + EMPTY)
+        if any(piece not in allowed for row in self.board for piece in row):
+            return False
+        if sum(piece == "♔" for row in self.board for piece in row) != 1:
+            return False
+        if sum(piece == "♚" for row in self.board for piece in row) != 1:
+            return False
+        return True
+
+    def _valid_state(self):
+        """Validate externally mutable game-state fields before processing moves."""
+        if self.turn not in COLORS or not self._valid_board():
+            return False
+        if not isinstance(self.castling, dict) or set(self.castling) != COLORS:
+            return False
+        required = {"king_moved", "king_rook_moved", "queen_rook_moved"}
+        for data in self.castling.values():
+            if not isinstance(data, dict) or set(data) != required:
+                return False
+            if not all(isinstance(value, bool) for value in data.values()):
+                return False
+        if self.en_passant is not None and (
+            not isinstance(self.en_passant, (tuple, list))
+            or len(self.en_passant) != 2
+            or not all(isinstance(value, int) for value in self.en_passant)
+            or not self._valid_square(*self.en_passant)
+        ):
+            return False
+        if not isinstance(self.halfmove_clock, int) or self.halfmove_clock < 0:
+            return False
+        return True
+
     def legal_moves(self, row, col):
-        if self.game_over or piece_color(self.board[row][col]) != self.turn:
+        if self.game_over or not self._valid_state():
+            return []
+        if not self._valid_square(row, col):
+            return []
+        if piece_color(self.board[row][col]) != self.turn:
             return []
         return legal_moves(self.board, row, col, self.castling, self.en_passant)
 
     def move(self, source, target, promotion="queen"):
         """Apply a legal move and update all game state."""
-        if self.game_over:
+        if self.game_over or not self._valid_state():
+            return False
+        if (
+            not isinstance(source, (tuple, list))
+            or len(source) != 2
+            or not all(isinstance(value, int) for value in source)
+            or not isinstance(target, (tuple, list))
+            or len(target) != 2
+            or not all(isinstance(value, int) for value in target)
+        ):
             return False
 
         row, col = source
-        if not self._valid_square(row, col) or target not in self.legal_moves(row, col):
+        target_row, target_col = target
+        if not self._valid_square(row, col) or not self._valid_square(target_row, target_col):
+            return False
+        if target not in self.legal_moves(row, col):
             return False
 
-        target_row, target_col = target
         piece = self.board[row][col]
         if piece in "♙♟" and target_row in (0, 7) and promotion not in PROMOTION_CHOICES:
             raise ValueError("promotion must be queen, rook, bishop or knight")
+        if piece not in WHITE_PIECES + BLACK_PIECES:
+            return False
 
         old_en_passant = self.en_passant
-        captured = self.board[target_row][target_col] != " "
+        captured = self.board[target_row][target_col] != EMPTY
         self.en_passant = None
 
         if (
             piece in "♙♟"
             and target == old_en_passant
-            and self.board[target_row][target_col] == " "
+            and self.board[target_row][target_col] == EMPTY
         ):
             captured_row = target_row + (1 if piece == "♙" else -1)
-            self.board[captured_row][target_col] = " "
+            self.board[captured_row][target_col] = EMPTY
             captured = True
 
         self._update_moved_rights(piece, source)
         self._invalidate_captured_rook(target)
         self.board[target_row][target_col] = piece
-        self.board[row][col] = " "
+        self.board[row][col] = EMPTY
 
         if piece in "♔♚" and abs(target_col - col) == 2:
             rook_col = 7 if target_col > col else 0
             rook_target = 5 if target_col > col else 3
             rook = self.board[row][rook_col]
             self.board[row][rook_target] = rook
-            self.board[row][rook_col] = " "
+            self.board[row][rook_col] = EMPTY
 
         if piece in "♙♟" and target_row in (0, 7):
             self.board[target_row][target_col] = self._promotion_piece(piece, promotion)
@@ -129,7 +186,7 @@ class ChessGame:
         return not self.game_over and self.halfmove_clock >= 100
 
     def can_claim_threefold_repetition(self):
-        if self.game_over:
+        if self.game_over or not self.position_history:
             return False
         current = self.position_history[-1]
         return sum(position == current for position in self.position_history) >= 3
@@ -183,8 +240,10 @@ class ChessGame:
         return choices[promotion][0 if pawn == "♙" else 1]
 
     def is_in_check(self):
+        if not self._valid_state():
+            return False
         return is_in_check(self.board, self.turn)
 
     @staticmethod
     def _valid_square(row, col):
-        return 0 <= row < 8 and 0 <= col < 8
+        return isinstance(row, int) and isinstance(col, int) and 0 <= row < 8 and 0 <= col < 8
