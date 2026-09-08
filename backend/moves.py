@@ -48,6 +48,21 @@ def sliding_moves(board, row, col, directions):
     return result
 
 
+def sliding_attacks(board, row, col, directions):
+    """Return attacked squares for sliders, including an enemy king square."""
+    result = []
+    for dr, dc in directions:
+        for step in range(1, 8):
+            r, c = row + dr * step, col + dc * step
+            if not in_bounds(r, c):
+                break
+            target = board[r][c]
+            result.append((r, c))
+            if target != EMPTY:
+                break
+    return result
+
+
 def pseudo_moves(board, row, col):
     """Return attacked squares without checking whether the attacker exposes its king."""
     piece = board[row][col]
@@ -70,11 +85,11 @@ def pseudo_moves(board, row, col):
             if in_bounds(row + dr, col + dc)
         ]
     if piece in ROOKS:
-        return sliding_moves(board, row, col, ROOK_DIRECTIONS)
+        return sliding_attacks(board, row, col, ROOK_DIRECTIONS)
     if piece in BISHOPS:
-        return sliding_moves(board, row, col, BISHOP_DIRECTIONS)
+        return sliding_attacks(board, row, col, BISHOP_DIRECTIONS)
     if piece in QUEENS:
-        return sliding_moves(board, row, col, QUEEN_DIRECTIONS)
+        return sliding_attacks(board, row, col, QUEEN_DIRECTIONS)
     return []
 
 
@@ -135,9 +150,13 @@ def _normal_moves(board, row, col):
             (row + dr, col + dc)
             for dr, dc in KNIGHT_OFFSETS
             if in_bounds(row + dr, col + dc)
-            and (board[row + dr][col + dc] == EMPTY
-                 or (not same_color(piece, board[row + dr][col + dc])
-                     and _is_capturable_target(board[row + dr][col + dc])))
+            and (
+                board[row + dr][col + dc] == EMPTY
+                or (
+                    not same_color(piece, board[row + dr][col + dc])
+                    and _is_capturable_target(board[row + dr][col + dc])
+                )
+            )
         ]
 
     elif piece in KINGS:
@@ -145,9 +164,13 @@ def _normal_moves(board, row, col):
             (row + dr, col + dc)
             for dr, dc in KING_OFFSETS
             if in_bounds(row + dr, col + dc)
-            and (board[row + dr][col + dc] == EMPTY
-                 or (not same_color(piece, board[row + dr][col + dc])
-                     and _is_capturable_target(board[row + dr][col + dc])))
+            and (
+                board[row + dr][col + dc] == EMPTY
+                or (
+                    not same_color(piece, board[row + dr][col + dc])
+                    and _is_capturable_target(board[row + dr][col + dc])
+                )
+            )
         ]
 
     elif piece in ROOKS:
@@ -220,7 +243,6 @@ def legal_moves(board, row, col, castling, en_passant=None):
             captured_row = target_row + (1 if piece == "♙" else -1)
             test[captured_row][target_col] = EMPTY
 
-        # A king may move only to a square that is not attacked after the move.
         if not is_in_check(test, color):
             legal.append((target_row, target_col))
 
@@ -242,17 +264,12 @@ def _dead_position_by_material(board):
     if not pieces:
         return True
 
-    # Any pawn, rook or queen leaves possible mating sequences.
     if any(piece in PAWNS + ROOKS + QUEENS for piece in pieces):
         return False
 
-    # A lone bishop or knight against a king cannot mate.
     if len(pieces) == 1 and pieces[0] in BISHOPS + KNIGHTS:
         return True
 
-    # King + bishop versus king + bishop is dead when both bishops live on
-    # squares of the same colour: neither side can ever control the other
-    # bishop's colour complex.
     if len(pieces) == 2 and all(piece in BISHOPS for piece in pieces):
         bishop_squares = []
         for r in range(8):
@@ -279,11 +296,9 @@ def game_state(board, color, castling, en_passant=None, halfmove_clock=0, histor
 
     if history is not None:
         current = history[-1]
-        occurrences = sum(position == current for position in history)
-        if occurrences >= 5:
+        if sum(position == current for position in history) >= 5:
             return "nulle_repetition_cinq"
 
-    # FIDE Article 9.6.2: 75 moves by each player = 150 half-moves.
     if halfmove_clock >= 150:
         return "nulle_75_coups"
 
