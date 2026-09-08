@@ -76,8 +76,8 @@ class BackendTestCase(unittest.TestCase):
     def test_king_cannot_move_into_check(self):
         game = self.empty_game()
         game.board[7][4] = "♔"
-        game.board[0][4] = "♚"
-        game.board[0][0] = "♜"
+        game.board[0][4] = "♜"
+        game.board[0][0] = "♚"
         self.assertNotIn((6, 4), game.legal_moves(7, 4))
 
     def test_castling_kingside_and_queenside(self):
@@ -112,8 +112,8 @@ class BackendTestCase(unittest.TestCase):
             "king_rook_moved": False,
             "queen_rook_moved": True,
         }
-        game.board[0][4] = "♚"
-        game.board[0][0] = "♜"
+        game.board[0][4] = "♜"
+        game.board[0][0] = "♚"
         self.assertTrue(is_in_check(game.board, "blanc"))
         self.assertNotIn((7, 6), game.legal_moves(7, 4))
 
@@ -121,15 +121,17 @@ class BackendTestCase(unittest.TestCase):
         game = ChessGame()
         game.board[7][6] = " "
         game.board[7][5] = " "
+        game.board[6][7] = " "
         self.assertTrue(game.move((7, 7), (6, 7)))
         self.assertTrue(game.move((0, 6), (2, 5)))
         self.assertTrue(game.move((6, 7), (7, 7)))
-        self.assertFalse(game.castling["blanc"]["king_rook_moved"] is False)
+        self.assertTrue(game.castling["blanc"]["king_rook_moved"])
 
     def test_castling_right_is_lost_after_rook_is_captured(self):
         game = self.empty_game()
         game.board[7][7] = "♖"
         game.board[0][7] = "♜"
+        game.board[6][7] = " "
         game.castling["blanc"] = {
             "king_moved": False,
             "king_rook_moved": False,
@@ -140,8 +142,6 @@ class BackendTestCase(unittest.TestCase):
             "king_rook_moved": True,
             "queen_rook_moved": True,
         }
-        game.board[6][7] = "♙"
-        self.assertTrue(game.move((6, 7), (5, 7)))
         game.turn = "noir"
         self.assertTrue(game.move((0, 7), (7, 7)))
         self.assertTrue(game.castling["blanc"]["king_rook_moved"])
@@ -208,33 +208,37 @@ class BackendTestCase(unittest.TestCase):
 
     def test_checkmate_and_stalemate(self):
         game = self.empty_game()
+        game.board[7][4] = " "
         game.board[0][0] = "♚"
-        game.board[7][4] = "♔"
-        game.board[2][2] = "♔"
+        game.board[5][2] = "♔"
         game.board[1][1] = "♕"
         game.turn = "noir"
         self.assertEqual(game_state(game.board, game.turn, game.castling), "mat")
 
         game = self.empty_game()
+        game.board[7][4] = " "
         game.board[0][0] = "♚"
-        game.board[2][2] = "♔"
+        game.board[5][2] = "♔"
         game.board[2][1] = "♕"
         game.turn = "noir"
         self.assertEqual(game_state(game.board, game.turn, game.castling), "pat")
 
     def test_threefold_repetition_is_claimable_not_automatic(self):
         game = self.empty_game()
+        game.board[7][0] = "♖"
         game.position_history = [game.position_key()] * 3
         self.assertIsNone(game_state(game.board, game.turn, game.castling, history=game.position_history))
         self.assertTrue(game.can_claim_threefold_repetition())
 
     def test_fivefold_repetition_is_automatic(self):
         game = self.empty_game()
+        game.board[7][0] = "♖"
         game.position_history = [game.position_key()] * 5
         self.assertEqual(game_state(game.board, game.turn, game.castling, history=game.position_history), "nulle_repetition_cinq")
 
     def test_fifty_move_rule_is_claimable_and_seventy_five_is_automatic(self):
         game = self.empty_game()
+        game.board[7][0] = "♖"
         game.halfmove_clock = 100
         self.assertTrue(game.can_claim_fifty_move_draw())
         self.assertIsNone(game_state(game.board, game.turn, game.castling, halfmove_clock=100))
@@ -243,9 +247,9 @@ class BackendTestCase(unittest.TestCase):
 
     def test_checkmate_takes_precedence_over_seventy_five_move_draw(self):
         game = self.empty_game()
+        game.board[7][4] = " "
         game.board[0][0] = "♚"
-        game.board[7][4] = "♔"
-        game.board[2][2] = "♔"
+        game.board[5][2] = "♔"
         game.board[1][1] = "♕"
         game.turn = "noir"
         game.halfmove_clock = 150
@@ -286,12 +290,18 @@ class BackendTestCase(unittest.TestCase):
         game.board[7][4] = "♔"
         game.board[0][0] = "♚"
         game.board[3][4] = "♙"
-        game.board[3][3] = "♟"
         game.en_passant = (2, 3)
         with_ep = game.position_key()
         game.en_passant = None
         without_ep = game.position_key()
         self.assertEqual(with_ep, without_ep)
+
+        game.board[3][3] = "♟"
+        game.en_passant = (2, 3)
+        with_effective_ep = game.position_key()
+        game.en_passant = None
+        without_effective_ep = game.position_key()
+        self.assertNotEqual(with_effective_ep, without_effective_ep)
 
     def test_game_cannot_be_played_after_terminal_state(self):
         game = self.empty_game()
